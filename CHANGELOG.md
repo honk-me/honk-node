@@ -1,0 +1,24 @@
+# Changelog
+
+All notable changes to `honk-me` (npm) are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
+[Semantic Versioning](https://semver.org/).
+
+## [0.1.0] - 2026-10-03
+
+### Added
+- `Honk` client for `POST /v1/messages` with every field of the v1 ingestion API
+  (including `imageUrl`), camelCase in, snake_case on the wire.
+- Automatic UUIDv7 `Idempotency-Key` (or your own), reused on every retry.
+- Retries for network errors, timeouts, 429 and 5xx with exponential backoff, full jitter,
+  `Retry-After` and a total deadline.
+- Typed errors: `HonkValidationError`, `HonkAuthError`, `HonkQuotaError`,
+  `HonkConflictError`, `HonkNetworkError`, `HonkTimeoutError`, `HonkServerError`.
+- Local validation of limits, enums and https-only URLs, with every invalid field reported.
+- Helpers `problem`, `recovery`, `info`, `success`, `warning`, `error`, `critical`;
+  `Honk.fromEnv()`.
+- ESM + CommonJS builds with TypeScript types, zero runtime dependencies; Node 18+, Bun, Deno.
+- The Honk scale: severity horn aliases `light` (info), `beep` (success), `loud` (warning),
+  `long` (error), `blast` (critical), case-insensitive and always sent canonical; `Severity`
+  constants (`Severity.Loud === 'warning'`), `normalizeSeverity()` and the `light`, `beep`,
+  `loud`, `long`, `blast` helpers.

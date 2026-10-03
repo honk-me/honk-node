@@ -1,0 +1,65 @@
+{
+  "name": "honk-me",
+  "version": "0.1.0",
+  "description": "Official Node.js/TypeScript client for Honk: send events from apps, scripts and automations to your phone, with retries and idempotency built in.",
+  "keywords": [
+    "honk",
+    "notifications",
+    "push",
+    "alerts",
+    "monitoring",
+    "webhook",
+    "inbox"
+  ],
+  "homepage": "https://github.com/honk-me/honk/tree/main/sdk/node#readme",
+  "bugs": {
+    "url": "https://github.com/honk-me/honk/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/honk-me/honk.git",
+    "directory": "sdk/node"
+  },
+  "license": "MIT",
+  "author": "Honk contributors",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/unit.test.mjs test/cjs.test.cjs",
+    "test:integration": "npm run build && node --test test/integration.test.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "typescript": "^7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
