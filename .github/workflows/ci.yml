@@ -1,0 +1,59 @@
+# Tests on every push and pull request; release.yml calls it before publishing.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22, 24] # engines: node >= 18
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - name: The package contains only dist, README, LICENSE and CHANGELOG
+        run: |
+          files="$(npm pack --dry-run --json --ignore-scripts | jq -r '.[0].files[].path')"
+          echo "$files"
+          unexpected="$(grep -vE '^(dist/.+|package\.json|README\.md|LICENSE|CHANGELOG\.md)$' <<<"$files" || true)"
+          [ -z "$unexpected" ] || { echo "::error::unexpected files in the npm package: $unexpected"; exit 1; }
+
+  runtimes:
+    name: bun + deno
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: npm ci && npm run build
+      - run: bun test/runtime-smoke.mjs && bun test test/unit.test.mjs
+      - run: deno run --allow-net --allow-read test/runtime-smoke.mjs && deno test --allow-all test/unit.test.mjs

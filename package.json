@@ -1,24 +1,27 @@
 {
   "name": "honk-me",
   "version": "0.1.0",
-  "description": "Official Node.js/TypeScript client for Honk: send events from apps, scripts and automations to your phone, with retries and idempotency built in.",
+  "description": "Official Node.js/TypeScript client for Honk (honk-me.app): send events from apps, scripts and automations to your phone, with retries and idempotency built in.",
   "keywords": [
     "honk",
+    "honk-me",
     "notifications",
-    "push",
+    "push-notifications",
     "alerts",
+    "alerting",
     "monitoring",
     "webhook",
-    "inbox"
+    "inbox",
+    "sdk",
+    "typescript"
   ],
-  "homepage": "https://github.com/honk-me/honk/tree/main/sdk/node#readme",
+  "homepage": "https://github.com/honk-me/honk-node#readme",
   "bugs": {
-    "url": "https://github.com/honk-me/honk/issues"
+    "url": "https://github.com/honk-me/honk-node/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/honk-me/honk.git",
-    "directory": "sdk/node"
+    "url": "git+https://github.com/honk-me/honk-node.git"
   },
   "license": "MIT",
   "author": "Honk contributors",

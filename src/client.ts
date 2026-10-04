@@ -13,8 +13,9 @@ import {
 import type { Defaults, HelperOptions, HonkOptions, Message, SendOptions, SendResult, Severity } from './types.js';
 import { uuidv7 } from './uuid.js';
 import { buildBody, checkIdempotencyKey } from './validate.js';
+import { VERSION } from './version.js';
 
-export const VERSION = '0.1.0';
+export { VERSION };
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_RETRIES = 4;

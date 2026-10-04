@@ -4,7 +4,7 @@ All notable changes to `honk-me` (npm) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - 2026-10-03
+## [0.1.0] - 2026-10-04
 
 ### Added
 - `Honk` client for `POST /v1/messages` with every field of the v1 ingestion API

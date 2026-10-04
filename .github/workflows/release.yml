@@ -1,0 +1,105 @@
+# Publishes honk-me to npm when a tag vX.Y.Z is pushed. The monorepo's sdk-mirror workflow
+# pushes that tag for a monorepo tag sdk-node-vX.Y.Z.
+#
+# Authentication is npm trusted publishing (OIDC): no token is stored. On npmjs.com the package
+# trusts this repository, workflow file "release.yml" and environment "npm". npm only lets you
+# add a trusted publisher to a package that already exists, so the very first publish uses a
+# short-lived granular token in the NPM_TOKEN secret (environment "npm"); delete it afterwards.
+# Provenance is attached because the repository is public.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      name: ${{ steps.v.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: v
+        name: The tag, package.json and CHANGELOG.md agree
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::tag $GITHUB_REF_NAME is not vX.Y.Z"; exit 1; }
+          actual="$(jq -r .version package.json)"
+          [ "$actual" = "$v" ] || { echo "::error::package.json has version $actual but the tag is $GITHUB_REF_NAME"; exit 1; }
+          grep -qF "## [$v]" CHANGELOG.md || { echo "::error::CHANGELOG.md has no '## [$v]' section"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "name=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+
+  npm:
+    needs: [verify, test]
+    runs-on: ubuntu-24.04
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/${{ needs.verify.outputs.name }}/v/${{ needs.verify.outputs.version }}
+    permissions:
+      contents: read
+      id-token: write # trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # No dependency cache in the publishing job.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@^11.5.1 # trusted publishing needs npm >= 11.5.1
+      - run: npm ci
+      - id: published
+        name: Already on npm? (a re-run, or a first version published by hand)
+        env:
+          PKG: ${{ needs.verify.outputs.name }}@${{ needs.verify.outputs.version }}
+        run: |
+          if npm view "$PKG" version >/dev/null 2>&1; then
+            echo "::notice::$PKG is already on npm, not publishing it again"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: npm publish --provenance --access public
+        if: steps.published.outputs.skip != 'true'
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          # Empty once trusted publishing is set up; only the first publish needs it.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          tag=latest
+          [[ "$VERSION" == *-* ]] && tag=next # pre-releases never become "latest"
+          npm publish --provenance --access public --tag "$tag"
+
+  github-release:
+    needs: [verify, npm]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: GitHub release with the CHANGELOG entry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          NAME: ${{ needs.verify.outputs.name }}
+        run: |
+          awk -v h="## [$VERSION]" 'index($0, h) == 1 {f = 1; next} f && /^## \[/ {exit} f' CHANGELOG.md > notes.md
+          # shellcheck disable=SC2016 # the backticks are a literal Markdown code fence
+          printf '\n```sh\nnpm install %s@%s\n```\n' "$NAME" "$VERSION" >> notes.md
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md

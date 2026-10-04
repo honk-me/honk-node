@@ -1,8 +1,11 @@
 # honk-me
 
-Official Node.js / TypeScript client for [Honk](https://github.com/honk-me/honk), the
-self-hosted inbox that turns events from your apps, scripts, cron jobs and CI into calm,
-grouped push notifications on your phone.
+[![CI](https://github.com/honk-me/honk-node/actions/workflows/ci.yml/badge.svg)](https://github.com/honk-me/honk-node/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/honk-me)](https://www.npmjs.com/package/honk-me)
+
+Official Node.js / TypeScript client for [Honk](https://honk-me.app), the inbox that turns
+events from your apps, scripts, cron jobs and CI into calm, grouped push notifications on your
+phone.
 
 - Zero runtime dependencies. ESM, CommonJS and TypeScript types.
 - Node 18+ (global `fetch`). Also works on Bun and Deno (`npm:honk-me`).
@@ -19,6 +22,9 @@ grouped push notifications on your phone.
 ```sh
 npm install honk-me
 ```
+
+Create a project and an ingestion key at [honk-me.app](https://honk-me.app). Its
+*Integrations* page generates ready-to-paste code for this package.
 
 ## Quick start
 
@@ -201,7 +207,18 @@ Bun: `bun add honk-me`, then use it as in Node.
 npm install
 npm test                 # build + unit tests (mock server) + CommonJS smoke test
 npm run typecheck        # also checks the published .d.ts from ESM and CJS consumers
-HONK_URL=… HONK_KEY=… npm run test:integration   # against a real server, see ../README.md
+HONK_URL=… HONK_KEY=… npm run test:integration   # against a real server (use a test project's key)
 ```
+
+The version lives in `package.json`; the build regenerates `src/version.ts` (`VERSION`, the
+User-Agent) from it. Releases: push a tag `vX.Y.Z` matching `package.json` and the release
+workflow publishes to npm with provenance (see `CHANGELOG.md`).
+
+## Links
+
+- [honk-me.app](https://honk-me.app): the Honk inbox (web, iPhone).
+- Other SDKs: [PHP / Laravel](https://github.com/honk-me/honk-php),
+  [Go + CLI](https://github.com/honk-me/honk-go), [Swift](https://github.com/honk-me/honk-swift),
+  [Kotlin / Java](https://github.com/honk-me/honk-kotlin).
 
 MIT License.
