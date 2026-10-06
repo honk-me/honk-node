@@ -27,6 +27,7 @@ export {
   type EventType,
   type Category,
   type MetadataValue,
+  type Action,
   type Message,
   type Defaults,
   type HonkOptions,

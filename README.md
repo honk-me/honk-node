@@ -114,12 +114,13 @@ honk.send(message, { idempotencyKey?, signal? }) // → Promise<{ id, duplicate,
 | `occurredAt` | `Date` or RFC 3339 string | informational |
 | `url` | string | `https://` only, no credentials |
 | `imageUrl` | string | `https://` only, no credentials or `#fragment`; fetched by the server afterwards |
+| `actions` | `{ title, url }[]` | up to 3 buttons, the first is the primary; see below |
 | `metadata` | `Record<string, string \| number \| boolean>` | ≤ 16 keys `[A-Za-z0-9_.-]{1,64}`, strings ≤ 512 chars |
 | `ttlSeconds` | integer | push lifetime 60–86400, default 3600 |
 | `sourceSequence` | integer | 0 … 2^53-1, needs `groupKey`; a delayed recovery never closes a newer problem |
 
-Fields are camelCase in this SDK and sent with the API's snake_case names. `null`, `undefined`
-and empty optional strings are omitted. A resolved promise means Honk **durably stored** the
+Fields are camelCase in this SDK and sent with the API's snake_case names. `null`, `undefined`,
+empty optional strings and an empty `actions` array are omitted. A resolved promise means Honk **durably stored** the
 message (`202`); it does not mean a push was delivered or read.
 
 Helpers (the last argument takes any message field plus `idempotencyKey` and `signal`):
@@ -131,6 +132,33 @@ await honk.beep(title, message, opts); await honk.long(title, message, opts); aw
 await honk.problem('db/backup', 'Backup failed', 'pg_dump exited with 1');      // a long honk by default
 await honk.recovery('db/backup', 'Backup OK', 'pg_dump finished in 41 s');      // a beep by default
 ```
+
+### Buttons (actions)
+
+Up to three buttons on the message, in display order: reply to the customer, call them, open
+the order.
+
+```js
+await honk.send({
+  title: 'New request: online shop quote',
+  message: 'Emily Carter (Acme) asked for a quote: online shop, 40 products',
+  category: 'customers',
+  groupKey: 'requests/4812',
+  actions: [
+    { title: 'Reply', url: 'mailto:emily@example.com?subject=Your%20quote' },
+    { title: 'Call Emily', url: 'tel:+15550134' },
+  ],
+});
+```
+
+- `title`: 1–40 characters, one line, shown as sent.
+- `url`, at most 2048 bytes without spaces: `https://` (no credentials); `mailto:` with one
+  address and optionally `?subject=…&body=…` (percent-encoded with `encodeURIComponent`, no
+  other keys); `tel:` with a number (digits, `-` `.` `(` `)`, `+` only first); `sms:` with a
+  number and optionally `?body=…`. Other schemes are refused.
+- Honk never opens or fetches them; the app does when you tap one. They appear on the
+  message in the app and the web inbox, and on iPhone notifications that show the message
+  text. Errors name the button: `actions[1].url`.
 
 ### Options
 

@@ -87,6 +87,27 @@ describe('serialisation', () => {
     assert.equal(s.requests[0].raw, '{"message":"Backup finished in 42s"}');
   });
 
+  test('actions are sent as [{ title, url }] in order; empty actions are omitted', async () => {
+    const s = await server(ok());
+    const honk = new Honk({ url: s.url, key: KEY });
+    const actions = [
+      { title: 'Reply', url: 'mailto:emily@example.com?subject=Your%20quote' },
+      { title: 'Call Emily', url: 'tel:+15550134' },
+      { title: 'Open request', url: 'https://shop.example.com/admin/requests/4812' },
+    ];
+    await honk.send({ message: 'Emily asked for a quote', actions });
+    await honk.send({ message: 'x', actions: [] });
+    await honk.send({ message: 'x', actions: null });
+    await honk.loud('Disk 91%', '/var on app-01', { actions: [{ title: 'Text on-call', url: 'sms:+15550134?body=Disk%2091%25' }] });
+    assert.equal(
+      s.requests[0].raw,
+      '{"message":"Emily asked for a quote","actions":[{"title":"Reply","url":"mailto:emily@example.com?subject=Your%20quote"},{"title":"Call Emily","url":"tel:+15550134"},{"title":"Open request","url":"https://shop.example.com/admin/requests/4812"}]}',
+    );
+    assert.equal(s.requests[1].raw, '{"message":"x"}');
+    assert.equal(s.requests[2].raw, '{"message":"x"}');
+    assert.deepEqual(s.requests[3].json.actions, [{ title: 'Text on-call', url: 'sms:+15550134?body=Disk%2091%25' }]);
+  });
+
   test('defaults fill unset source/environment/channel; the message wins', async () => {
     const s = await server(ok());
     const honk = new Honk({ url: s.url, key: KEY, defaults: { source: 'laravel', environment: 'production', channel: '' } });
@@ -378,6 +399,33 @@ describe('local validation', () => {
     [{ message: 'x', ttlSeconds: 59 }, 'ttl_seconds', 'out_of_range'],
     [{ message: 'x', ttlSeconds: 86401 }, 'ttl_seconds', 'out_of_range'],
     [{ message: 'x', group_key: 'g' }, 'group_key', 'not_allowed'],
+    [{ message: 'x', actions: Array(4).fill({ title: 'Call', url: 'tel:+15550134' }) }, 'actions', 'too_long'],
+    [{ message: 'x', actions: 'tel:+15550134' }, 'actions', 'invalid_format'],
+    [{ message: 'x', actions: ['tel:+15550134'] }, 'actions', 'invalid_format'],
+    [{ message: 'x', actions: [{ url: 'tel:+15550134' }] }, 'actions[0].title', 'required'],
+    [{ message: 'x', actions: [{ title: '   ', url: 'tel:+15550134' }] }, 'actions[0].title', 'required'],
+    [{ message: 'x', actions: [{ title: 't'.repeat(41), url: 'tel:+15550134' }] }, 'actions[0].title', 'too_long'],
+    [{ message: 'x', actions: [{ title: 'Call\nEmily', url: 'tel:+15550134' }] }, 'actions[0].title', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Call', url: '' }] }, 'actions[0].url', 'required'],
+    [{ message: 'x', actions: [{ title: 'Open', url: `https://example.com/${'a'.repeat(2030)}` }] }, 'actions[0].url', 'too_long'],
+    [{ message: 'x', actions: [{ title: 'Call', url: 'tel:+15550134' }, { title: 'Open', url: 'http://example.com' }] }, 'actions[1].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Open', url: 'https://user:pw@example.com' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Run', url: 'javascript:alert(1)' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Open', url: 'shop://orders/4812' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily?subject=Hi' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily@example.com?subject=Your quote' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Call', url: 'tel:call-me' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Call', url: 'tel:+1 555 0134' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Text', url: 'sms:?body=hi' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily@localhost' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily@example.com,ana@example.com' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily@example.com?cc=boss@example.com' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily@example.com?subject=%zz' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Text', url: 'sms:+15550134?subject=Hi' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Open', url: 'https://example.com/a\u00a0b' }] }, 'actions[0].url', 'invalid_format'],
+    [{ message: 'x', actions: [{ title: 'Call', url: '   ' }] }, 'actions[0].url', 'required'],
+    [{ message: 'x', actions: [{ title: 'Call', url: 'tel:+15550134', icon: 'phone' }] }, 'actions[0].icon', 'not_allowed'],
     [{ message: 'x'.repeat(8000), metadata: Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`k${i}`, '"'.repeat(500)])) }, 'body', 'too_long'],
   ];
   for (const [msg, field, code] of bad) {
@@ -421,10 +469,49 @@ describe('local validation', () => {
     assert.equal(body.source_sequence, 9007199254740991);
   });
 
+  test('valid actions pass', () => {
+    for (const url of [
+      'https://shop.example.com:8443/admin/requests/4812?tab=notes#reply',
+      'HTTPS://shop.example.com',
+      'mailto:emily@example.com',
+      'MailTo:emily.carter+quotes@example.co.uk?subject=Your%20quote&body=Hi%20Emily%2C',
+      'tel:+15550134',
+      'TEL:+1-(555)-013.4',
+      'tel://+40721000000',
+      'sms:+15550134',
+      'SMS:0721000000?body=On%20my%20way',
+      'mailto:%65mily@example.com?body=a+b&subject=',
+      '  tel:+15550134  ',
+    ]) {
+      assert.deepEqual(buildBody({ message: 'x', actions: [{ title: 'Open', url }] }).actions, [{ title: 'Open', url }], url);
+    }
+    const title = `  ${'é'.repeat(39)}🚀  `; // 40 code points once trimmed
+    assert.equal(buildBody({ message: 'x', actions: [{ title, url: 'tel:+15550134' }] }).actions[0].title, title);
+  });
+
+  test('more than 3 actions is one error, like on the server', () => {
+    assert.throws(
+      () => buildBody({ message: 'x', actions: ['a', 'b', { title: '' }, { url: 'ftp://x' }] }),
+      (e) => e.fields.map((f) => `${f.field}:${f.code}`).join(',') === 'actions:too_long',
+    );
+  });
+
+  test('all action errors are reported with their index', () => {
+    assert.throws(
+      () => buildBody({ message: 'x', actions: [{ title: 'Reply', url: 'mailto:emily@example.com' }, { title: '', url: 'ftp://files' }, { title: 'Call' }] }),
+      (e) => e.fields.map((f) => `${f.field}:${f.code}`).join(',') === 'actions[1].title:required,actions[1].url:invalid_format,actions[2].url:required',
+    );
+  });
+
   test('invalid idempotency keys are rejected locally', async () => {
     for (const key of ['', 'has space', 'x'.repeat(129), 'ünicode']) {
       await assert.rejects(honk.send({ message: 'x' }, { idempotencyKey: key }), (e) => e instanceof HonkValidationError && e.fields[0].field === 'Idempotency-Key');
     }
+  });
+
+  test('validate:false sends actions as given', () => {
+    const actions = [{ title: 'Run', url: 'javascript:alert(1)' }];
+    assert.deepEqual(buildBody({ message: 'x', actions }, {}, false).actions, actions);
   });
 
   test('validate:false leaves value checks to the server', async () => {

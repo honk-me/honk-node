@@ -11,6 +11,8 @@ export const LIMITS = {
   channel: 64,
   groupKey: 128,
   urlBytes: 2048,
+  actions: 3,
+  actionTitle: 40,
   metadataKeys: 16,
   metadataValue: 512,
   ttlMin: 60,
@@ -33,6 +35,7 @@ const FIELDS = {
   occurredAt: 'occurred_at',
   url: 'url',
   imageUrl: 'image_url',
+  actions: 'actions',
   metadata: 'metadata',
   ttlSeconds: 'ttl_seconds',
   sourceSequence: 'source_sequence',
@@ -48,6 +51,15 @@ const CONTROL_EXCEPT_BREAKS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u0
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
 const METADATA_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,128}$/;
+// Unicode White_Space outside the control characters (Go's unicode.IsSpace, as on the server).
+const SPACE = /[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]/;
+// The number of a tel: or sms: action: an optional leading +, digits and - . ( ) separators.
+const PHONE_NUMBER = /^\+?[0-9().-]*[0-9][0-9().-]*$/;
+// A single plain mailto: address, once percent-decoded: dot-atom@dot-atom with a dotted domain
+// (or an IPv4 literal).
+const ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~\\-\\u{80}-\\u{10ffff}]+";
+const MAIL_ADDRESS = new RegExp(`^${ATOM}(\\.${ATOM})*@(${ATOM}(\\.${ATOM})+|\\[[0-9.]*\\.[0-9.]*\\])$`, 'u');
+const BAD_ESCAPE = /%(?![0-9A-Fa-f]{2})/;
 
 const encoder = new TextEncoder();
 export const byteLength = (s: string): number => encoder.encode(s).length;
@@ -107,7 +119,7 @@ export function buildBody(input: Message, defaults: Defaults = {}, validate = tr
   const body: Record<string, unknown> = {};
   for (const name of Object.keys(FIELDS) as (keyof Message)[]) {
     const v = value(name);
-    if (v === undefined) continue;
+    if (v === undefined || (name === 'actions' && Array.isArray(v) && v.length === 0)) continue;
     const wire = FIELDS[name];
     if (name === 'occurredAt') {
       if (v instanceof Date) {
@@ -181,6 +193,7 @@ function checkMessage(b: Record<string, unknown>, add: Add): void {
   if (b.image_url !== undefined && !validUrl(b.image_url, true)) {
     add('image_url', 'invalid_format', 'must be an https URL without credentials or fragment, at most 2048 bytes');
   }
+  checkActions(b.actions, add);
 
   const md = b.metadata;
   if (md !== undefined) {
@@ -209,6 +222,86 @@ function checkMessage(b: Record<string, unknown>, add: Add): void {
   if (ttl !== undefined && (typeof ttl !== 'number' || !Number.isInteger(ttl) || ttl < LIMITS.ttlMin || ttl > LIMITS.ttlMax)) {
     add('ttl_seconds', 'out_of_range', `must be an integer between ${LIMITS.ttlMin} and ${LIMITS.ttlMax}`);
   }
+}
+
+function checkActions(v: unknown, add: Add): void {
+  if (v === undefined) return;
+  const format = 'must be an array of at most 3 { title, url } objects';
+  if (!Array.isArray(v)) return add('actions', 'invalid_format', format);
+  if (v.length > LIMITS.actions) return add('actions', 'too_long', `at most ${LIMITS.actions} actions`);
+  if (v.some((a) => a === null || typeof a !== 'object' || Array.isArray(a))) return add('actions', 'invalid_format', format);
+  (v as Record<string, unknown>[]).forEach((a, i) => {
+    const field = `actions[${i}]`;
+    const title = typeof a.title === 'string' ? a.title.trim() : a.title;
+    if (title === undefined || title === null || title === '') add(`${field}.title`, 'required', 'title is required');
+    else if (typeof title !== 'string') add(`${field}.title`, 'invalid_format', 'must be a string');
+    else if (codePoints(title) > LIMITS.actionTitle) add(`${field}.title`, 'too_long', `must be at most ${LIMITS.actionTitle} characters`);
+    else if (CONTROL.test(title)) add(`${field}.title`, 'invalid_format', 'must be one line without control characters');
+
+    const url = typeof a.url === 'string' ? a.url.trim() : a.url;
+    if (url === undefined || url === null || url === '') add(`${field}.url`, 'required', 'url is required');
+    else if (typeof url !== 'string') add(`${field}.url`, 'invalid_format', 'must be a string');
+    else if (byteLength(url) > LIMITS.urlBytes) add(`${field}.url`, 'too_long', `must be at most ${LIMITS.urlBytes} bytes`);
+    else if (!validActionUrl(url)) add(`${field}.url`, 'invalid_format', 'must be an https://, mailto:, tel: or sms: URL without spaces');
+
+    for (const key of Object.keys(a).sort()) {
+      if (key !== 'title' && key !== 'url') add(`${field}.${key}`, 'not_allowed', 'unknown field (an action has title and url)');
+    }
+  });
+}
+
+/**
+ * The server's check of a (trimmed) action URL, scheme in any case: `https://` with a host and
+ * no credentials (as `url`), `mailto:` with one address and an optional `?subject=…&body=…`,
+ * `tel:` / `tel://` with a number, `sms:` with a number and an optional `?body=…`.
+ */
+export function validActionUrl(s: string): boolean {
+  if (CONTROL.test(s) || SPACE.test(s)) return false;
+  const colon = s.indexOf(':');
+  if (colon < 0) return false;
+  const rest = s.slice(colon + 1);
+  const [head, query] = splitOnce(rest, '?');
+  switch (s.slice(0, colon).toLowerCase()) {
+    case 'https':
+      return validUrl(s, false);
+    case 'mailto':
+      return mailAddress(head) && actionQuery(query, ['subject', 'body']);
+    case 'tel':
+      return PHONE_NUMBER.test(rest.startsWith('//') ? rest.slice(2) : rest);
+    case 'sms':
+      return PHONE_NUMBER.test(head) && actionQuery(query, ['body']);
+    default:
+      return false;
+  }
+}
+
+function splitOnce(s: string, sep: string): [string, string] {
+  const i = s.indexOf(sep);
+  return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)];
+}
+
+function mailAddress(s: string): boolean {
+  if (BAD_ESCAPE.test(s)) return false;
+  try {
+    return MAIL_ADDRESS.test(decodeURIComponent(s));
+  } catch {
+    return false;
+  }
+}
+
+// Valid percent-encoding, no ";" separators and only the allowed keys ("" is no query).
+function actionQuery(q: string, allowed: string[]): boolean {
+  for (const pair of q.split('&')) {
+    if (pair.includes(';') || BAD_ESCAPE.test(pair)) return false;
+    if (pair === '') continue;
+    const [key] = splitOnce(pair, '=');
+    try {
+      if (!allowed.includes(decodeURIComponent(key.replace(/\+/g, ' ')))) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 function shortText(b: Record<string, unknown>, field: string, max: number, add: Add): void {

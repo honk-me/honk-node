@@ -46,6 +46,25 @@ describe('integration (real server)', { skip }, () => {
     assert.equal(again.receivedAt.getTime(), first.receivedAt.getTime());
   });
 
+  test('a customer request with actions is accepted, and a replay is a duplicate', async () => {
+    const msg = {
+      title: `Customer request ${run}`,
+      message: 'Emily Carter (Acme) asked for a quote: online shop, 40 products',
+      category: 'customers',
+      groupKey: `requests/${run}/actions`,
+      actions: [
+        { title: 'Reply', url: 'mailto:emily@example.com?subject=Your%20quote' },
+        { title: 'Call Emily', url: 'tel:+15550134' },
+        { title: 'Open request', url: 'https://example.com/admin/requests/4812' },
+      ],
+    };
+    const key = `it-${await uuidv7()}`;
+    const first = await honk.send(msg, { idempotencyKey: key });
+    const again = await honk.send(msg, { idempotencyKey: key });
+    assert.equal(again.duplicate, true);
+    assert.equal(again.id, first.id);
+  });
+
   test('same key with a different payload is a HonkConflictError', async () => {
     const key = `it-${await uuidv7()}`;
     await honk.info('first', `payload A ${run}`, { idempotencyKey: key });
@@ -98,6 +117,17 @@ describe('integration (real server)', { skip }, () => {
       assert.equal(e.code, 'validation_failed');
       const fields = e.fields.map((f) => `${f.field}:${f.code}`).sort();
       assert.deepEqual(fields, ['severity:invalid_enum', 'ttl_seconds:out_of_range']);
+      return true;
+    });
+  });
+
+  test('server-side action validation names the action', async () => {
+    const raw = new Honk({ url: HONK_URL, key: HONK_KEY, validate: false });
+    const actions = [{ title: 'Call', url: 'tel:+15550134' }, { title: 'Run', url: 'javascript:alert(1)' }];
+    await assert.rejects(raw.send({ message: 'x', actions }), (e) => {
+      assert.ok(e instanceof HonkValidationError);
+      assert.equal(e.status, 422);
+      assert.deepEqual(e.fields.map((f) => `${f.field}:${f.code}`), ['actions[1].url:invalid_format']);
       return true;
     });
   });

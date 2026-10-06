@@ -88,6 +88,21 @@ export const CATEGORIES: readonly Category[] = [
 export type MetadataValue = string | number | boolean;
 
 /**
+ * A button on the message. Honk never opens or fetches the URL; the app opens it when the user
+ * taps the button.
+ */
+export interface Action {
+  /** 1–40 characters (trimmed), one line, shown as sent: `Reply`, `Call Emily`. */
+  title: string;
+  /**
+   * ≤ 2048 bytes, no spaces: `https://` (no credentials), `mailto:` with one address
+   * (`?subject=…&body=…` percent-encoded, no other keys), `tel:` or `sms:` with a number
+   * (`sms:` also `?body=…`). Other schemes are refused.
+   */
+  url: string;
+}
+
+/**
  * One event for `POST /v1/messages`. Only `message` is required. Fields are camelCase here and
  * sent as the snake_case names of the API (`groupKey` → `group_key`). Empty optional strings
  * and `null`/`undefined` are omitted.
@@ -125,6 +140,8 @@ export interface Message {
   url?: string | null;
   /** HTTPS image fetched by the server after ingestion. No credentials or fragment. ≤ 2048 bytes. */
   imageUrl?: string | null;
+  /** Up to 3 buttons, in display order (the first is the primary). Empty means none. */
+  actions?: readonly Action[] | null;
   /** ≤ 16 keys matching `[A-Za-z0-9_.-]{1,64}`; values are strings (≤ 512 chars), numbers or booleans. */
   metadata?: Record<string, MetadataValue> | null;
   /** Push lifetime, 60–86400 seconds. Default 3600. */

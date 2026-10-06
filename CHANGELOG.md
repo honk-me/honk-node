@@ -4,6 +4,14 @@ All notable changes to `honk-me` (npm) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `actions`: up to 3 buttons on a message, `{ title, url }` with an `https://`, `mailto:`,
+  `tel:` or `sms:` URL (the `Action` type). Validated locally like the server does, with
+  errors named `actions[1].url`; empty `actions` are omitted, so messages without buttons are
+  sent exactly as before.
+
 ## [0.1.1] - 2026-10-06
 
 ### Fixed
