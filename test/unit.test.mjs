@@ -248,6 +248,17 @@ describe('retries and idempotency', () => {
     assert.equal(s.requests.length, 2);
   });
 
+  test('does not start a retry that could only time out at the deadline', async () => {
+    // 200 ms per answer, then a 1 s wait: a retry would have about 100 ms before the deadline.
+    const s = await server({ ...apiError(503, 'unavailable', {}, { 'retry-after': '1' }), delayMs: 200 });
+    await assert.rejects(new Honk({ url: s.url, key: KEY, retries: 10, deadlineMs: 1300, ...fast }).send({ message: 'x' }), (e) => {
+      assert.ok(e instanceof HonkServerError, `got ${e.name}`);
+      assert.equal(e.retryAfter, 1);
+      return true;
+    });
+    assert.equal(s.requests.length, 1);
+  });
+
   test('times out with HonkTimeoutError once retries are exhausted', async () => {
     const s = await server({ ...ok(), delayMs: 500 });
     await assert.rejects(new Honk({ url: s.url, key: KEY, timeoutMs: 50, retries: 1, ...fast }).send({ message: 'x' }), (e) => {

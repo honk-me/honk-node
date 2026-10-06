@@ -155,8 +155,9 @@ new Honk({
   `duplicate: true`, so a lost response never creates a second message.
 - Only network errors, timeouts, `429` and `5xx` are retried, with exponential backoff and
   full jitter (`random(0, min(8 s, 0.5 s·2ⁿ))`), never sooner than the server's `Retry-After`.
-- Everything stops at `deadlineMs`: if the next wait would cross it (for example a daily quota
-  that resets at midnight), the error is thrown at once with `retryAfter`.
+- Everything stops at `deadlineMs`: if the next wait, plus time for one more attempt, would
+  cross it (for example a daily quota that resets at midnight), the error is thrown at once
+  with `retryAfter`.
 - `4xx` other than `429` are never retried: fix the request instead.
 - Short per-attempt timeouts; Node's `fetch` keeps connections alive, so create one `Honk`
   per process and reuse it.
@@ -216,9 +217,11 @@ workflow publishes to npm with provenance (see `CHANGELOG.md`).
 
 ## Links
 
-- [honk-me.app](https://honk-me.app): the Honk inbox (web, iPhone).
+- [honk-me.app](https://honk-me.app): the Honk inbox (web, iPhone, Apple Watch).
 - Other SDKs: [PHP / Laravel](https://github.com/honk-me/honk-php),
   [Go + CLI](https://github.com/honk-me/honk-go), [Swift](https://github.com/honk-me/honk-swift),
-  [Kotlin / Java](https://github.com/honk-me/honk-kotlin).
+  [Kotlin / Java](https://github.com/honk-me/honk-kotlin), [Rust](https://github.com/honk-me/honk-rust).
+- No code: [n8n node](https://github.com/honk-me/honk-n8n) (`n8n-nodes-honk`) and the
+  [WordPress plugin](https://github.com/honk-me/honk-wordpress).
 
 MIT License.

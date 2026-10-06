@@ -4,6 +4,18 @@ All notable changes to `honk-me` (npm) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-06
+
+### Fixed
+- Near the deadline, a retry no longer starts with only a few milliseconds left. Such an
+  attempt could only time out, and its `HonkTimeoutError` hid the server's real answer (for
+  example `503`). A retry now needs at least 250 ms (or `timeoutMs`, when shorter) before
+  `deadlineMs`; otherwise the last error is thrown at once.
+
+### Changed
+- Package author: Honk <accounts@honk-me.app>. The README links the Rust SDK, the n8n node
+  and the WordPress plugin.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added

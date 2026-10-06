@@ -22,6 +22,9 @@ const DEFAULT_RETRIES = 4;
 const DEFAULT_DEADLINE_MS = 30_000;
 const DEFAULT_BACKOFF_BASE_MS = 500;
 const DEFAULT_BACKOFF_MAX_MS = 8_000;
+// A retry starts only with at least this long left before the deadline (or timeoutMs, when
+// shorter): with less it could only time out, and its timeout would hide the real error.
+const MIN_ATTEMPT_MS = 250;
 
 /** Seconds from a Retry-After header (delta-seconds or HTTP date), or undefined. */
 export function parseRetryAfter(value: string | null, now: number = Date.now()): number | undefined {
@@ -127,7 +130,7 @@ export class Honk {
       if (attempt > this.retries) throw failure;
       const jitter = Math.random() * Math.min(this.#backoffMax, this.#backoffBase * 2 ** (attempt - 1));
       const wait = Math.max(jitter, (failure.retryAfter ?? 0) * 1000);
-      if (Date.now() + wait >= deadline) throw failure;
+      if (Date.now() + wait + Math.min(this.timeoutMs, MIN_ATTEMPT_MS) > deadline) throw failure;
       await sleep(wait, signal);
     }
   }
