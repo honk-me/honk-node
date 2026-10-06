@@ -4,7 +4,7 @@ All notable changes to `honk-me` (npm) are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-10-07
 
 ### Added
 - `actions`: up to 3 buttons on a message, `{ title, url }` with an `https://`, `mailto:`,

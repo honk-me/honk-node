@@ -1,6 +1,6 @@
 {
   "name": "honk-me",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Official Node.js/TypeScript client for Honk (honk-me.app): send events from apps, scripts and automations to your phone, with retries and idempotency built in.",
   "keywords": [
     "honk",
